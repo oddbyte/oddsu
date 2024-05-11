@@ -9,7 +9,7 @@ Run `git clone https://github.com/OddbyteWasTaken/oddsu.git` and move into the f
 
 OR Download the latest release source.zip file, extract it, and cd into that folder.
 
-Run `bash compile.bash` as root or a user with sudo access to compile the source code
+Run `bash compile.bash` as root or a user with sudo access to compile the source code and install.
 
 Create your SuperKey, and enjoy using OddSU!
 
