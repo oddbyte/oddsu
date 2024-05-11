@@ -42,6 +42,19 @@ string generateSHA256(const string& input) {
     return digest;
 }
 
+string getPasswordInput() {
+    struct termios oldt, newt;
+    cout << "Enter the SuperKey (password): ";
+    tcgetattr(STDIN_FILENO, &oldt); // get old settings
+    newt = oldt;
+    newt.c_lflag &= ~(ECHO); // turn off echo
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    string password;
+    getline(cin, password);
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // restore old settings
+    return password;
+}
+
 unordered_map<string, SuperKey> loadSuperKeys() {
     unordered_map<string, SuperKey> superKeys;
     ifstream inFile(SUPERKEY_FILE);
@@ -77,16 +90,12 @@ void createInitialSuperKey() {
 
     SuperKey sk;
     sk.id = 0;
-    cout << "Enter a nickname for the SuperKey [will only be used in the editor so you can easily know which superkey is which]: ";
-    getline(cin, sk.readableName);
-    cout << "Enter a password for the SuperKey: ";
-    string password;
-    getline(cin, password);
+    sk.readableName = "Initial SuperKey";
+    cout << GREEN << "Enter the SuperKey" << RED << " [DANGER: This SuperKey is like the password to your system. Make sure that this is secure, and DO NOT share this key. Sharing this key will give an attacker full access over your system!]: ";
+    string password = getPasswordInput();
     sk.superKeyHash = generateSHA256(password);
-    cout << "Enter allowed users (comma-separated, * for all): ";
-    getline(cin, sk.allowedUsers);
-    cout << "Enter allowed commands (semicolon-separated, * for all): ";
-    getline(cin, sk.allowedCommands);
+    sk.allowedUsers = "*";
+    sk.allowedCommands = "*";
 
     saveSuperKey(sk);
     cout << "SuperKey created successfully with ID: " << sk.id << "\n";
@@ -105,7 +114,7 @@ void ensureCorrectEnvironment(bool forceInstall) {
 
     // Check if running at the correct path and with the correct permissions
     if (string(ptr) != TARGET_PATH || forceInstall) {
-        cerr << RED << "Executable is not in the correct path or forced reinstallation is underway." << RESET << endl;
+        cerr << RED << "Executable is not in the correct path or installation is underway." << RESET << endl;
         if (getuid() == 0) { // Only proceed if root
             cerr << GREEN << "Installing at " << TARGET_PATH << "..." << RESET << endl;
             string command = "cp " + string(ptr) + " " + TARGET_PATH + " && chmod 7555 " + TARGET_PATH + " && chown root:root " + TARGET_PATH;
@@ -192,14 +201,13 @@ int main(int argc, char* argv[]) {
 
     if (!forceInstall) {
         unordered_map<string, SuperKey> superKeys = loadSuperKeys();
-        cout << GREEN << "Enter SuperKey: " << RESET;
-        string inputKey;
-        getline(cin, inputKey);
+        cout << GREEN << "Enter the SuperKey to login: " << RESET;
+        string inputKey = getPasswordInput();
         string hashedInput = generateSHA256(inputKey);
 
         auto it = superKeys.find(hashedInput);
         if (it == superKeys.end()) {
-            cerr << RED << "Access denied. Incorrect SuperKey." << RESET << endl;
+            cerr << RED << "Access denied. SuperKey does not exist." << RESET;
             return 1;
         }
 
@@ -211,12 +219,12 @@ int main(int argc, char* argv[]) {
 
         struct passwd* pwd = getpwnam(username.c_str());
         if (!pwd) {
-            cerr << RED << "User does not exist: " << username << RESET << endl;
+            cerr << RED << "Error. User does not exist: " << username << RESET << endl;
             return 1;
         }
 
         if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0) {
-            cerr << RED << "Failed to change user and group ID." << RESET << endl;
+            cerr << RED << "Error. Failed to change user and group ID." << RESET << endl;
             return 1;
         }
 
