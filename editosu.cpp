@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <ctime>
 #include <sstream>
+#include <unistd.h>
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
