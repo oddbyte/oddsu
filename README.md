@@ -1,14 +1,15 @@
 # OddSU
 ## The Key-Based SU system.
-### Install:
-Run the install.bash script in the release tab as root to start installation.
 
-### Compile:
+### Compile and install automatically:
+Run the install.bash script in the release tab as root to start installation, create your SuperKey, and enjoy using OddSU!
+
+### Compile and install manually:
 Run `git clone https://github.com/OddbyteWasTaken/oddsu.git` and move into the folder it creates.
 
 OR Download the latest release source.zip file, extract it, and cd into that folder.
 
-Run `bash compile.bash` as root or a user with sudo access
+Run `bash compile.bash` as root or a user with sudo access to compile the source code
 
 Create your SuperKey, and enjoy using OddSU!
 
