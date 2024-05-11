@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <ctime>
 #include <sstream>
+#include <vector>
 #include <unistd.h>
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
@@ -22,17 +23,18 @@ string generateSHA256(const string& input) {
 }
 
 struct SuperKey {
-    string id;
+    int id; // Changed to int cause its an ID
     string readableName;
     string superKeyHash;
     string allowedUsers;
     string allowedCommands;
 };
 
-unordered_map<string, SuperKey> loadSuperKeys() {
-    unordered_map<string, SuperKey> superKeys;
+pair<unordered_map<int, SuperKey>, int> loadSuperKeys() {
+    unordered_map<int, SuperKey> superKeys;
     ifstream inFile(SUPERKEY_FILE);
     string line;
+    int maxId = -1;
 
     while (getline(inFile, line)) {
         stringstream ss(line);
@@ -45,15 +47,17 @@ unordered_map<string, SuperKey> loadSuperKeys() {
 
         if (seglist.size() < 5) continue;
 
-        SuperKey sk{seglist[0], seglist[1], seglist[2], seglist[3], seglist[4]};
-        superKeys[sk.id] = sk;
+        int id = stoi(seglist[0]);
+        maxId = max(maxId, id);
+        SuperKey sk{ id, seglist[1], seglist[2], seglist[3], seglist[4] };
+        superKeys[id] = sk;
     }
 
     inFile.close();
-    return superKeys;
+    return { superKeys, maxId };
 }
 
-void saveSuperKeys(const unordered_map<string, SuperKey>& superKeys) {
+void saveSuperKeys(const unordered_map<int, SuperKey>& superKeys) {
     ofstream outFile(SUPERKEY_FILE);
     for (const auto& pair : superKeys) {
         const auto& sk = pair.second;
@@ -62,15 +66,10 @@ void saveSuperKeys(const unordered_map<string, SuperKey>& superKeys) {
     outFile.close();
 }
 
-string getCurrentTimeAsString() {
-    time_t now = time(0);
-    return to_string(now);
-}
+void addSuperKey(unordered_map<int, SuperKey>& superKeys, int& currentMaxId) {
+    string name, password, users, commands;
 
-void addSuperKey(unordered_map<string, SuperKey>& superKeys) {
-    string name, password, users, commands, id;
-
-    id = getCurrentTimeAsString();
+    int id = ++currentMaxId;  // Increment currentMaxId for new ID
     cout << "Enter a user-readable name for the SuperKey: ";
     getline(cin, name);
     cout << "Enter a password for the SuperKey: ";
@@ -86,10 +85,11 @@ void addSuperKey(unordered_map<string, SuperKey>& superKeys) {
     cout << "SuperKey added successfully with ID: " << id << "\n";
 }
 
-void editSuperKey(unordered_map<string, SuperKey>& superKeys) {
-    string id;
+void editSuperKey(unordered_map<int, SuperKey>& superKeys) {
+    int id;
     cout << "Enter the ID of the SuperKey to edit: ";
-    getline(cin, id);
+    cin >> id;
+    cin.ignore();  // Eat the newline character left in the input buffer
 
     auto it = superKeys.find(id);
     if (it != superKeys.end()) {
@@ -110,10 +110,11 @@ void editSuperKey(unordered_map<string, SuperKey>& superKeys) {
     }
 }
 
-void deleteSuperKey(unordered_map<string, SuperKey>& superKeys) {
-    string id;
+void deleteSuperKey(unordered_map<int, SuperKey>& superKeys) {
+    int id;
     cout << "Enter the ID of the SuperKey to delete: ";
-    getline(cin, id);
+    cin >> id;
+    cin.ignore(); // Eat the newline character
 
     if (superKeys.find(id) != superKeys.end()) {
         superKeys.erase(id);
@@ -123,8 +124,16 @@ void deleteSuperKey(unordered_map<string, SuperKey>& superKeys) {
     }
 }
 
+void listSuperKeys(const unordered_map<int, SuperKey>& superKeys) {
+    cout << "Listing all SuperKeys:\n";
+    for (const auto& pair : superKeys) {
+        const auto& sk = pair.second;
+        cout << "ID: " << sk.id << ", Name: " << sk.readableName << ", Allowed Users: " << sk.allowedUsers << ", Allowed Commands: " << sk.allowedCommands << endl;
+    }
+}
+
 void menu() {
-    unordered_map<string, SuperKey> superKeys = loadSuperKeys();
+    auto [superKeys, currentMaxId] = loadSuperKeys();
 
     string input;
     while (true) {
@@ -132,17 +141,20 @@ void menu() {
         cout << "1. Add SuperKey\n";
         cout << "2. Edit SuperKey\n";
         cout << "3. Delete SuperKey\n";
-        cout << "4. Exit\n";
+        cout << "4. List SuperKeys\n";
+        cout << "5. Exit\n";
         cout << "Choose an option: ";
         getline(cin, input);
 
         if (input == "1") {
-            addSuperKey(superKeys);
+            addSuperKey(superKeys, currentMaxId);
         } else if (input == "2") {
             editSuperKey(superKeys);
         } else if (input == "3") {
             deleteSuperKey(superKeys);
         } else if (input == "4") {
+            listSuperKeys(superKeys);
+        } else if (input == "5") {
             break;
         } else {
             cout << "Invalid option. Please try again.\n";

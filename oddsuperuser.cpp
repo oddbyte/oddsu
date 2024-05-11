@@ -13,6 +13,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <getopt.h>
+#include <ctime>
+#include <sys/stat.h>
+#include <libgen.h>
 
 using namespace CryptoPP;
 using namespace std;
@@ -25,7 +28,7 @@ const char* RESET = "\033[0m";
 const string TARGET_PATH = "/usr/bin/osu";
 
 struct SuperKey {
-    string id;
+    int id;
     string readableName;
     string superKeyHash;
     string allowedUsers;
@@ -82,11 +85,6 @@ bool hasPermission(const string& allowedUsers, const string& allowedCommands, co
     }
     
     return userAllowed && commandAllowed;
-}
-
-string getCurrentTimeAsString() {
-    time_t now = time(0);
-    return to_string(now);
 }
 
 void saveSuperKey(const SuperKey& sk) {
