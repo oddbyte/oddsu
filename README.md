@@ -1,9 +1,12 @@
 # OddSU
 ## The Key-Based SU system.
-### Installation:
+### Install:
+Run the release oddsuperuser binary as root to start installation.
+
+### Compile:
 Run `git clone https://github.com/OddbyteWasTaken/oddsu.git` and move into the folder it creates.
 
-OR Download the latest release .zip file, extract it, and cd into that folder.
+OR Download the latest release source.zip file, extract it, and cd into that folder.
 
 Run `bash install.sh` as root or a user with sudo access
 
