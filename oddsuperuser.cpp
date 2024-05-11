@@ -1,3 +1,6 @@
+// Made by Oddbyte
+
+
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
@@ -11,6 +14,7 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
+#include <limits.h>
 
 using namespace CryptoPP;
 using std::string;
@@ -77,24 +81,34 @@ bool checkFileSecurity(const string& path, mode_t expectedMode, uid_t expectedUi
 }
 
 void installAsRoot(const string& targetPath, const string& keyPath) {
-    const char* sourcePath = "/proc/self/exe";
-    std::string command = "cp " + string(sourcePath) + " " + targetPath;
-    system(command.c_str());
-    chmod(targetPath.c_str(), S_ISUID | S_ISGID | S_IRUSR | S_IWUSR | S_IXUSR);  // Set setuid and setgid bits
-    chown(targetPath.c_str(), 0, 0);
+    char sourcePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", sourcePath, sizeof(sourcePath) - 1);
+    if (len != -1) {
+        sourcePath[len] = '\0'; // Null-terminate the string
+        std::ifstream sourceFile(sourcePath, std::ios::binary);
+        std::ofstream targetFile(targetPath, std::ios::binary);
+        targetFile << sourceFile.rdbuf();
+        sourceFile.close();
+        targetFile.close();
 
-    // Create key file if it does not exist
-    struct stat buffer;
-    if (stat(keyPath.c_str(), &buffer) != 0) {
-        std::cout << "Please create your SuperKey: ";
-        string superKey = readSecureLine();
-        string superKeyHash = generateSHA256(superKey);
+        chmod(targetPath.c_str(), S_ISUID | S_ISGID | S_IRUSR | S_IWUSR | S_IXUSR);  // Set setuid and setgid bits
+        chown(targetPath.c_str(), 0, 0);
 
-        std::ofstream outFile(keyPath, std::ios_base::out);
-        outFile << superKeyHash;
-        outFile.close();
-        chmod(keyPath.c_str(), S_IRUSR); // Readable by root only
-        chown(keyPath.c_str(), 0, 0);
+        // Create key file if it does not exist
+        struct stat buffer;
+        if (stat(keyPath.c_str(), &buffer) != 0) {
+            std::cout << "Please create your SuperKey: ";
+            string superKey = readSecureLine();
+            string superKeyHash = generateSHA256(superKey);
+
+            std::ofstream outFile(keyPath, std::ios_base::out);
+            outFile << superKeyHash;
+            outFile.close();
+            chmod(keyPath.c_str(), S_IRUSR); // Readable by root only
+            chown(keyPath.c_str(), 0, 0);
+        }
+    } else {
+        std::cerr << "Failed to get the path of the running executable." << std::endl;
     }
 }
 
