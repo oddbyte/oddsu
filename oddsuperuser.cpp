@@ -1,190 +1,146 @@
 #include <iostream>
 #include <fstream>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <pwd.h>
+#include <sstream>
 #include <string>
-#include <cstdlib>
 #include <vector>
-#include <termios.h>
+#include <unordered_map>
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
-#include <limits.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <cstdlib>
+#include <cstring>
+#include <getopt.h>
 
 using namespace CryptoPP;
-using std::string;
-using std::vector;
+using namespace std;
+
+const string SUPERKEY_FILE = "/etc/SuperKey";
+const char* RED = "\033[1;31m";
+const char* GREEN = "\033[1;32m";
+const char* YELLOW = "\033[1;33m";
+const char* RESET = "\033[0m";
+
+struct SuperKey {
+    string id;
+    string readableName;
+    string superKeyHash;
+    string allowedUsers;
+    string allowedCommands;
+};
 
 string generateSHA256(const string& input) {
     SHA256 hash;
     string digest;
-
-    StringSource s(input, true,
-        new HashFilter(hash,
-            new HexEncoder(
-                new StringSink(digest)
-            )
-        )
-    );
-
+    StringSource(input, true, new HashFilter(hash, new HexEncoder(new StringSink(digest))));
     return digest;
 }
 
-bool isRoot() {
-    return geteuid() == 0;
+unordered_map<string, SuperKey> loadSuperKeys() {
+    unordered_map<string, SuperKey> superKeys;
+    ifstream inFile(SUPERKEY_FILE);
+    string line;
+
+    while (getline(inFile, line)) {
+        stringstream ss(line);
+        string id, name, hash, users, commands;
+        getline(ss, id, ':');
+        getline(ss, name, ':');
+        getline(ss, hash, ':');
+        getline(ss, users, ':');
+        getline(ss, commands);
+
+        SuperKey sk{id, name, hash, users, commands};
+        superKeys[hash] = sk;
+    }
+
+    inFile.close();
+    return superKeys;
 }
 
-string readSecureLine() {
-    string input;
-    termios oldt, newt;
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-
-    getline(std::cin, input);
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    std::cout << std::endl;
-    return input;
+void listPermissions(const string& users, const string& commands) {
+    cout << YELLOW << "Allowed users: " << RESET << users << endl;
+    cout << YELLOW << "Allowed commands: " << RESET << commands << endl;
 }
 
-bool verifySuperKey(const string& keyPath, const string& inputKey) {
-    std::ifstream inFile(keyPath);
-    string storedHash;
-    if (inFile.is_open()) {
-        std::getline(inFile, storedHash);
-        inFile.close();
-        return generateSHA256(inputKey) == storedHash;
-    }
-    return false;
-}
+bool hasPermission(const string& allowedUsers, const string& allowedCommands, const string& username, const string& command) {
+    vector<string> users, commands;
+    stringstream ssUsers(allowedUsers), ssCommands(allowedCommands);
+    string item;
 
-bool checkFileSecurity(const string& path, mode_t expectedMode, uid_t expectedUid, gid_t expectedGid) {
-    struct stat fileInfo;
-    if (stat(path.c_str(), &fileInfo) != 0) {
-        return false;
-    }
-    if ((fileInfo.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) != expectedMode) {
-        return false;
-    }
-    if (fileInfo.st_uid != expectedUid || fileInfo.st_gid != expectedGid) {
-        return false;
-    }
-    return true;
-}
+    while (getline(ssUsers, item, ',')) users.push_back(item);
+    while (getline(ssCommands, item, ';')) commands.push_back(item);
 
-void installAsRoot(const string& targetPath, const string& keyPath) {
-    char sourcePath[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", sourcePath, sizeof(sourcePath) - 1);
-    if (len != -1) {
-        sourcePath[len] = '\0';
-        std::ifstream sourceFile(sourcePath, std::ios::binary);
-        std::ofstream targetFile(targetPath, std::ios::binary);
-        targetFile << sourceFile.rdbuf();
-        sourceFile.close();
-        targetFile.close();
-
-        chmod(targetPath.c_str(), S_ISUID | S_ISGID | S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-        chown(targetPath.c_str(), 0, 0);
-
-        struct stat buffer;
-        if (stat(keyPath.c_str(), &buffer) != 0) {
-            std::cout << "\033[1;33mPlease create your SuperKey: \033[0m";
-            string superKey = readSecureLine();
-            string superKeyHash = generateSHA256(superKey);
-
-            std::ofstream outFile(keyPath, std::ios_base::out);
-            outFile << superKeyHash;
-            outFile.close();
-            chmod(keyPath.c_str(), S_IRUSR);
-            chown(keyPath.c_str(), 0, 0);
-        }
-    } else {
-        std::cerr << "\033[1;31mFailed to get the path of the running executable.\033[0m" << std::endl;
+    bool userAllowed = find(users.begin(), users.end(), username) != users.end() || find(users.begin(), users.end(), "*") != users.end();
+    bool commandAllowed = find(commands.begin(), commands.end(), command) != commands.end() || find(commands.begin(), commands.end(), "*") != commands.end();
+    
+    if (!userAllowed || !commandAllowed) {
+        listPermissions(allowedUsers, allowedCommands);
     }
-}
-
-uid_t getUserID(const string& user) {
-    if (isdigit(user[0])) {
-        return atoi(user.c_str());
-    } else {
-        struct passwd *pwd = getpwnam(user.c_str());
-        if (pwd) {
-            return pwd->pw_uid;
-        } else {
-            throw std::runtime_error("User does not exist: " + user);
-        }
-    }
+    
+    return userAllowed && commandAllowed;
 }
 
 int main(int argc, char* argv[]) {
-    string installPath = "/usr/bin/osu";
-    string keyPath = "/usr/bin/osukey";
-    string user = "root";
-    vector<string> command;
-    bool executeCommand = false;
+    string username, command;
+    int opt;
 
-    bool needReinstall = true;
-    struct stat installStat;
-    if (stat(installPath.c_str(), &installStat) == 0) {
-        needReinstall = (installStat.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == (S_ISUID | S_ISGID | S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) &&
-                        installStat.st_uid == 0 && installStat.st_gid == 0;
-    }
-
-    if (needReinstall) {
-        if (isRoot()) {
-            installAsRoot(installPath, keyPath);
-        } else {
-            std::cerr << "\033[1;31mPlease run OddSU as root to install or set correct permissions.\033[0m" << std::endl;
-            return 1;
-        }
-    }
-
-    int i = 1;
-    while (i < argc) {
-        string arg = argv[i];
-        if (arg == "-u" && i + 1 < argc) {
-            user = argv[++i];
-        } else if (arg == "-c" && i + 1 < argc) {
-            executeCommand = true;
-            while (++i < argc) {
-                command.push_back(argv[i]);
-            }
-            break;
-        }
-        i++;
-    }
-    
-    try {
-        std::cout << "Enter SuperKey to gain access: ";
-        string inputKey = readSecureLine();
-
-        if (verifySuperKey(keyPath, inputKey)) {
-            uid_t uid = getUserID(user);
-            setuid(uid);
-            setgid(getpwuid(uid)->pw_gid);
-            std::cout << "\nAccess granted. You are now " << user << "." << std::endl;
-
-            if (executeCommand) {
-                string fullCommand;
-                for (const string& part : command) {
-                    fullCommand += part + " ";
-                }
-                system(fullCommand.c_str());
-            } else {
-                system("/bin/bash");
-            }
-        } else {
-            std::cerr << "\033[1;31mAccess denied. Incorrect SuperKey.\033[0m" << std::endl;
-        }
-
-    } catch (const std::exception& e) {
-        std::cerr << "\033[1;31mError: " << e.what() << "\033[0m" << std::endl;
+    if (argc < 2) {
+        cout << RED << "Usage: " << argv[0] << " -u <username> -c <command>" << RESET << endl;
         return 1;
     }
 
+    static struct option long_options[] = {
+        {"user", required_argument, nullptr, 'u'},
+        {"command", required_argument, nullptr, 'c'},
+        {nullptr, 0, nullptr, 0}
+    };
+
+    while ((opt = getopt_long(argc, argv, "u:c:", long_options, nullptr)) != -1) {
+        switch (opt) {
+            case 'u':
+                username = optarg;
+                break;
+            case 'c':
+                command = optarg;
+                break;
+            default:
+                cout << RED << "Invalid usage." << RESET << endl;
+                return 1;
+        }
+    }
+
+    unordered_map<string, SuperKey> superKeys = loadSuperKeys();
+    cout << GREEN << "Enter SuperKey: " << RESET;
+    string inputKey;
+    getline(cin, inputKey);
+    string hashedInput = generateSHA256(inputKey);
+
+    auto it = superKeys.find(hashedInput);
+    if (it == superKeys.end()) {
+        cerr << RED << "Access denied. Incorrect SuperKey." << RESET << endl;
+        return 1;
+    }
+
+    const SuperKey& sk = it->second;
+    if (!hasPermission(sk.allowedUsers, sk.allowedCommands, username, command)) {
+        cerr << RED << "Access denied. You do not have permission for this user/command." << RESET << endl;
+        return 1;
+    }
+
+    struct passwd* pwd = getpwnam(username.c_str());
+    if (!pwd) {
+        cerr << RED << "User does not exist: " << username << RESET << endl;
+        return 1;
+    }
+
+    if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0) {
+        cerr << RED << "Failed to change user and group ID." << RESET << endl;
+        return 1;
+    }
+
+    system(command.c_str());
     return 0;
 }
