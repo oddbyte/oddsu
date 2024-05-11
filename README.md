@@ -7,7 +7,7 @@ OR Download the latest release .zip file, extract it, and cd into that folder.
 
 Run `bash install.sh` as root or a user with sudo access
 
-Create your SuperKey, and enjoy using osu!
+Create your SuperKey, and enjoy using OddSU!
 
 
 This repo was inspired by APatch, the systemless root for android that I use.
