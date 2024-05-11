@@ -16,6 +16,7 @@
 #include <ctime>
 #include <sys/stat.h>
 #include <libgen.h>
+#include <termios.h>
 
 using namespace CryptoPP;
 using namespace std;
