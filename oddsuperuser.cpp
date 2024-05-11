@@ -22,6 +22,7 @@ const char* RED = "\033[1;31m";
 const char* GREEN = "\033[1;32m";
 const char* YELLOW = "\033[1;33m";
 const char* RESET = "\033[0m";
+const string TARGET_PATH = "/usr/bin/osu";
 
 struct SuperKey {
     string id;
@@ -83,7 +84,64 @@ bool hasPermission(const string& allowedUsers, const string& allowedCommands, co
     return userAllowed && commandAllowed;
 }
 
+string getCurrentTimeAsString() {
+    time_t now = time(0);
+    return to_string(now);
+}
+
+void saveSuperKey(const SuperKey& sk) {
+    ofstream outFile(SUPERKEY_FILE, ios_base::app);
+    outFile << sk.id << ":" << sk.readableName << ":" << sk.superKeyHash << ":" << sk.allowedUsers << ":" << sk.allowedCommands << endl;
+    outFile.close();
+}
+
+void createInitialSuperKey() {
+    cout << "Creating initial SuperKey..." << endl;
+
+    SuperKey sk;
+    sk.id = 0;
+    cout << "Enter a nickname for the SuperKey [will only be used in the editor so you can easily know which superkey is which]: ";
+    getline(cin, sk.readableName);
+    cout << "Enter a password for the SuperKey: ";
+    string password;
+    getline(cin, password);
+    sk.superKeyHash = generateSHA256(password);
+    cout << "Enter allowed users (comma-separated, * for all): ";
+    getline(cin, sk.allowedUsers);
+    cout << "Enter allowed commands (semicolon-separated, * for all): ";
+    getline(cin, sk.allowedCommands);
+
+    saveSuperKey(sk);
+    cout << "SuperKey created successfully with ID: " << sk.id << "\n";
+}
+
+void ensureCorrectEnvironment() {
+    char actualpath[PATH_MAX+1];
+    char *ptr = realpath("/proc/self/exe", actualpath);
+
+    // Check if running at the correct path and with the correct permissions
+    if (string(ptr) != TARGET_PATH) {
+        cerr << RED << "Executable is not in the correct path." << RESET << endl;
+        if (getuid() == 0) { // Only proceed if root
+            cerr << GREEN << "Installing at " << TARGET_PATH << "..." << RESET << endl;
+            string command = "cp " + string(ptr) + " " + TARGET_PATH + " && chmod 7555 " + TARGET_PATH + " && chown root:root " + TARGET_PATH;
+            system(command.c_str());
+        } else {
+            cerr << RED << "Please run as root to install OddSU properly." << RESET << endl;
+            exit(1);
+        }
+    }
+
+    // Check if the SuperKey file exists
+    struct stat buffer;
+    if (stat(SUPERKEY_FILE.c_str(), &buffer) != 0) {
+        cerr << YELLOW << "SuperKey file does not exist. Please create one." << endl;
+        createInitialSuperKey();
+    }
+}
+
 int main(int argc, char* argv[]) {
+    ensureCorrectEnvironment();
     string username, command;
     int opt;
 
