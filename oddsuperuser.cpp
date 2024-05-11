@@ -45,7 +45,6 @@ string generateSHA256(const string& input) {
 
 string getPasswordInput() {
     struct termios oldt, newt;
-    cout << "Enter the SuperKey (password): ";
     tcgetattr(STDIN_FILENO, &oldt); // get old settings
     newt = oldt;
     newt.c_lflag &= ~(ECHO); // turn off echo
