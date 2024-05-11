@@ -125,6 +125,37 @@ void ensureCorrectEnvironment(bool forceInstall) {
     }
 }
 
+void listPermissions(const string& users, const string& commands) {
+    cout << YELLOW << "Allowed users: " << RESET << users << endl;
+    cout << YELLOW << "Allowed commands: " << RESET << commands << endl;
+}
+
+// Function to check if a given username and command have permissions
+bool hasPermission(const string& allowedUsers, const string& allowedCommands, const string& username, const string& command) {
+    vector<string> users, commands;
+    stringstream ssUsers(allowedUsers), ssCommands(allowedCommands);
+    string item;
+
+    // Parse allowed users
+    while (getline(ssUsers, item, ',')) users.push_back(item);
+
+    // Parse allowed commands
+    while (getline(ssCommands, item, ';')) commands.push_back(item);
+
+    // Check if the username is allowed
+    bool userAllowed = find(users.begin(), users.end(), username) != users.end() || find(users.begin(), users.end(), "*") != users.end();
+    
+    // Check if the command is allowed
+    bool commandAllowed = find(commands.begin(), commands.end(), command) != commands.end() || find(commands.begin(), commands.end(), "*") != commands.end();
+    
+    // If not allowed, list the permissions
+    if (!userAllowed || !commandAllowed) {
+        listPermissions(allowedUsers, allowedCommands);
+    }
+    
+    return userAllowed && commandAllowed;
+}
+
 int main(int argc, char* argv[]) {
     int opt;
     bool forceInstall = false;
