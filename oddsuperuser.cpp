@@ -91,7 +91,7 @@ void installAsRoot(const string& targetPath, const string& keyPath) {
         sourceFile.close();
         targetFile.close();
 
-        chmod(targetPath.c_str(), S_ISUID | S_ISGID | S_IRUSR | S_IWUSR | S_IXUSR);  // Set setuid and setgid bits
+        chmod(targetPath.c_str(), S_ISUID | S_ISGID | S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // Set setuid and setgid bits
         chown(targetPath.c_str(), 0, 0);
 
         // Create key file if it does not exist
