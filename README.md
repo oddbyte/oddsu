@@ -1,14 +1,14 @@
 # OddSU
 ## The Key-Based SU system.
 ### Install:
-Run the release oddsuperuser binary as root to start installation.
+Run the install.bash script in the release tab as root to start installation.
 
 ### Compile:
 Run `git clone https://github.com/OddbyteWasTaken/oddsu.git` and move into the folder it creates.
 
 OR Download the latest release source.zip file, extract it, and cd into that folder.
 
-Run `bash install.sh` as root or a user with sudo access
+Run `bash compile.bash` as root or a user with sudo access
 
 Create your SuperKey, and enjoy using OddSU!
 
@@ -19,6 +19,11 @@ This repo was inspired by APatch, the systemless root for android that I use.
 ## Usage:
 ```
 osu [-u <UID/USERNAME> Defaults to 0 aka root] [-c *EVERYTHING after -c will be in the command. Put this AFTER -u! Defaults to /bin/bash]
+```
+
+## Editor Usage:
+```
+osu -c editosu
 ```
 
 ## IMPORTANT:

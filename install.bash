@@ -1,27 +1,18 @@
 #!/bin/bash
 
-# Update package lists
-sudo apt update
+git clone https://github.com/OddbyteWasTaken/oddsu.git
+
+
+# Update packages
+sudo apt update -y
 
 # Install build-essential and Crypto++ library
 sudo apt install build-essential libcrypto++-dev -y
 
-# Compile the key editor and install it, using the Crypto++ library cause we need it
-g++ -o editosu editosu.cpp -lcryptopp
+# Install the key editor and set the perms
 sudo mv editosu /usr/bin/
 sudo chown root:root /usr/bin/editosu
 sudo chmod 0500 /usr/bin/editosu
 
-# Compile the oddkey.cpp file, using the Crypto++ library cause we need it
-g++ -o oddsuperuser oddsuperuser.cpp -lcryptopp
-
-# Check if the compilation succeeded
-if [ $? -eq 0 ]; then
-    echo "Compilation successful."
-
-    # Run the program with root perms to trigger the installation
-    sudo ./oddsuperuser
-else
-    echo "Compilation failed."
-    exit 1
-fi
+# Install OddSU, all perms are handled by the installation script inside of here.
+sudo ./oddsuperuser
