@@ -50,7 +50,7 @@ unordered_map<string, SuperKey> loadSuperKeys() {
     while (getline(inFile, line)) {
         stringstream ss(line);
         string idStr, name, hash, users, commands;
-        getline(ss, id, ':');
+        getline(ss, idStr, ':');
         getline(ss, name, ':');
         getline(ss, hash, ':');
         getline(ss, users, ':');
