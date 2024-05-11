@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <libgen.h>
 #include <termios.h>
+#include <sys/wait.h>
 
 using namespace CryptoPP;
 using namespace std;
@@ -169,7 +170,7 @@ int main(int argc, char* argv[]) {
     int opt;
     bool forceInstall = false;
     string username = "root";
-    string command = "/bin/bash";
+    string command = "/bin/bash";  // Default command
 
     static struct option long_options[] = {
         {"user", required_argument, nullptr, 'u'},
@@ -186,7 +187,7 @@ int main(int argc, char* argv[]) {
             case 'c':
                 command = optarg;
                 break;
-            case 0:  // This case handles options that return '0' (long only options)
+            case 0:
                 if (string(long_options[optind - 1].name) == "install-force") {
                     forceInstall = true;
                 }
@@ -201,13 +202,13 @@ int main(int argc, char* argv[]) {
 
     if (!forceInstall) {
         unordered_map<string, SuperKey> superKeys = loadSuperKeys();
-        cout << GREEN << "Enter the SuperKey to login: " << RESET;
+        cout << GREEN << "Enter SuperKey: " << RESET;
         string inputKey = getPasswordInput();
         string hashedInput = generateSHA256(inputKey);
 
         auto it = superKeys.find(hashedInput);
         if (it == superKeys.end()) {
-            cerr << RED << "Access denied. SuperKey does not exist." << RESET;
+            cerr << RED << "Access denied. Incorrect SuperKey." << RESET << endl;
             return 1;
         }
 
@@ -219,16 +220,30 @@ int main(int argc, char* argv[]) {
 
         struct passwd* pwd = getpwnam(username.c_str());
         if (!pwd) {
-            cerr << RED << "Error. User does not exist: " << username << RESET << endl;
+            cerr << RED << "User does not exist: " << username << RESET << endl;
             return 1;
         }
 
-        if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0) {
-            cerr << RED << "Error. Failed to change user and group ID." << RESET << endl;
+        // Clear all environment variables
+        clearenv();
+
+        // Set necessary environment variables
+        setenv("HOME", pwd->pw_dir, 1);
+        setenv("USER", username.c_str(), 1);
+        setenv("LOGNAME", username.c_str(), 1);
+        setenv("SHELL", pwd->pw_shell, 1);
+        setenv("PATH", "/usr/bin:/bin", 1);  // Minimal PATH; adjust as needed
+
+        if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0 || seteuid(pwd->pw_uid) != 0) {
+            cerr << RED << "Failed to change user/group ID." << RESET << endl;
             return 1;
         }
 
-        system(command.c_str());
+        // Execute the command
+        char* newargv[] = {strdup(command.c_str()), nullptr}; // Command to execute
+        char* newenviron[] = {nullptr}; // Empty environment
+        execve(command.c_str(), newargv, newenviron);
+        perror("execve"); // execve only returns on error
     }
 
     return 0;
