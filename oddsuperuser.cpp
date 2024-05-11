@@ -127,7 +127,7 @@ uid_t getUserID(const string& user) {
 
 int main(int argc, char* argv[]) {
     string installPath = "/usr/bin/osu";
-    string keyPath = "/usr/bin/oukey";
+    string keyPath = "/usr/bin/osukey";
     string user = "root";
     vector<string> command;
     bool executeCommand = false;
