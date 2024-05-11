@@ -49,13 +49,14 @@ unordered_map<string, SuperKey> loadSuperKeys() {
 
     while (getline(inFile, line)) {
         stringstream ss(line);
-        int id;
-        string name, hash, users, commands;
+        string idStr, name, hash, users, commands;
         getline(ss, id, ':');
         getline(ss, name, ':');
         getline(ss, hash, ':');
         getline(ss, users, ':');
         getline(ss, commands);
+
+        int id = stoi(idStr); // Convert ID into a int
 
         SuperKey sk{id, name, hash, users, commands};
         superKeys[hash] = sk;
