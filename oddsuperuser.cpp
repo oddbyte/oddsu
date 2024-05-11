@@ -1,3 +1,9 @@
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <cstdlib>
+#include <cstring>
+#include <getopt.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -7,12 +13,6 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <pwd.h>
-#include <cstdlib>
-#include <cstring>
-#include <getopt.h>
 #include <ctime>
 #include <sys/stat.h>
 #include <libgen.h>
@@ -56,7 +56,7 @@ unordered_map<string, SuperKey> loadSuperKeys() {
         getline(ss, users, ':');
         getline(ss, commands);
 
-        int id = stoi(idStr); // Convert ID into a int
+        int id = stoi(idStr); // Convert the ID string to a Int
 
         SuperKey sk{id, name, hash, users, commands};
         superKeys[hash] = sk;
@@ -64,29 +64,6 @@ unordered_map<string, SuperKey> loadSuperKeys() {
 
     inFile.close();
     return superKeys;
-}
-
-void listPermissions(const string& users, const string& commands) {
-    cout << YELLOW << "Allowed users: " << RESET << users << endl;
-    cout << YELLOW << "Allowed commands: " << RESET << commands << endl;
-}
-
-bool hasPermission(const string& allowedUsers, const string& allowedCommands, const string& username, const string& command) {
-    vector<string> users, commands;
-    stringstream ssUsers(allowedUsers), ssCommands(allowedCommands);
-    string item;
-
-    while (getline(ssUsers, item, ',')) users.push_back(item);
-    while (getline(ssCommands, item, ';')) commands.push_back(item);
-
-    bool userAllowed = find(users.begin(), users.end(), username) != users.end() || find(users.begin(), users.end(), "*") != users.end();
-    bool commandAllowed = find(commands.begin(), commands.end(), command) != commands.end() || find(commands.begin(), commands.end(), "*") != commands.end();
-    
-    if (!userAllowed || !commandAllowed) {
-        listPermissions(allowedUsers, allowedCommands);
-    }
-    
-    return userAllowed && commandAllowed;
 }
 
 void saveSuperKey(const SuperKey& sk) {
@@ -115,19 +92,27 @@ void createInitialSuperKey() {
     cout << "SuperKey created successfully with ID: " << sk.id << "\n";
 }
 
-void ensureCorrectEnvironment() {
+void ensureCorrectEnvironment(bool forceInstall) {
     char actualpath[PATH_MAX+1];
     char *ptr = realpath("/proc/self/exe", actualpath);
 
+    // Handle forced installation
+    if (forceInstall) {
+        remove(TARGET_PATH.c_str()); // Remove the existing executable
+        remove(SUPERKEY_FILE.c_str()); // Remove the existing SuperKey file
+        cout << GREEN << "Forced reinstallation initiated." << RESET << endl;
+    }
+
     // Check if running at the correct path and with the correct permissions
-    if (string(ptr) != TARGET_PATH) {
-        cerr << RED << "Executable is not in the correct path." << RESET << endl;
+    if (string(ptr) != TARGET_PATH || forceInstall) {
+        cerr << RED << "Executable is not in the correct path or forced reinstallation is underway." << RESET << endl;
         if (getuid() == 0) { // Only proceed if root
             cerr << GREEN << "Installing at " << TARGET_PATH << "..." << RESET << endl;
             string command = "cp " + string(ptr) + " " + TARGET_PATH + " && chmod 7555 " + TARGET_PATH + " && chown root:root " + TARGET_PATH;
             system(command.c_str());
+            createInitialSuperKey();
         } else {
-            cerr << RED << "Please run as root to install OddSU properly." << RESET << endl;
+            cerr << RED << "Please run as root to install properly." << RESET << endl;
             exit(1);
         }
     }
@@ -135,24 +120,21 @@ void ensureCorrectEnvironment() {
     // Check if the SuperKey file exists
     struct stat buffer;
     if (stat(SUPERKEY_FILE.c_str(), &buffer) != 0) {
-        cerr << YELLOW << "SuperKey file does not exist. Please create one." << endl;
+        cerr << YELLOW << "SuperKey file does not exist. Creating one." << RESET << endl;
         createInitialSuperKey();
     }
 }
 
 int main(int argc, char* argv[]) {
-    ensureCorrectEnvironment();
-    string username, command;
     int opt;
-
-    if (argc < 2) {
-        cout << RED << "Usage: " << argv[0] << " -u <username> -c <command>" << RESET << endl;
-        return 1;
-    }
+    bool forceInstall = false;
+    string username = "root";
+    string command = "/bin/bash";
 
     static struct option long_options[] = {
         {"user", required_argument, nullptr, 'u'},
         {"command", required_argument, nullptr, 'c'},
+        {"install-force", no_argument, nullptr, 0},
         {nullptr, 0, nullptr, 0}
     };
 
@@ -164,41 +146,51 @@ int main(int argc, char* argv[]) {
             case 'c':
                 command = optarg;
                 break;
+            case 0:  // This case handles options that return '0' (long only options)
+                if (string(long_options[optind - 1].name) == "install-force") {
+                    forceInstall = true;
+                }
+                break;
             default:
                 cout << RED << "Invalid usage." << RESET << endl;
                 return 1;
         }
     }
 
-    unordered_map<string, SuperKey> superKeys = loadSuperKeys();
-    cout << GREEN << "Enter SuperKey: " << RESET;
-    string inputKey;
-    getline(cin, inputKey);
-    string hashedInput = generateSHA256(inputKey);
+    ensureCorrectEnvironment(forceInstall);
 
-    auto it = superKeys.find(hashedInput);
-    if (it == superKeys.end()) {
-        cerr << RED << "Access denied. Incorrect SuperKey." << RESET << endl;
-        return 1;
+    if (!forceInstall) {
+        unordered_map<string, SuperKey> superKeys = loadSuperKeys();
+        cout << GREEN << "Enter SuperKey: " << RESET;
+        string inputKey;
+        getline(cin, inputKey);
+        string hashedInput = generateSHA256(inputKey);
+
+        auto it = superKeys.find(hashedInput);
+        if (it == superKeys.end()) {
+            cerr << RED << "Access denied. Incorrect SuperKey." << RESET << endl;
+            return 1;
+        }
+
+        const SuperKey& sk = it->second;
+        if (!hasPermission(sk.allowedUsers, sk.allowedCommands, username, command)) {
+            cerr << RED << "Access denied. You do not have permission for this user/command." << RESET << endl;
+            return 1;
+        }
+
+        struct passwd* pwd = getpwnam(username.c_str());
+        if (!pwd) {
+            cerr << RED << "User does not exist: " << username << RESET << endl;
+            return 1;
+        }
+
+        if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0) {
+            cerr << RED << "Failed to change user and group ID." << RESET << endl;
+            return 1;
+        }
+
+        system(command.c_str());
     }
 
-    const SuperKey& sk = it->second;
-    if (!hasPermission(sk.allowedUsers, sk.allowedCommands, username, command)) {
-        cerr << RED << "Access denied. You do not have permission for this user/command." << RESET << endl;
-        return 1;
-    }
-
-    struct passwd* pwd = getpwnam(username.c_str());
-    if (!pwd) {
-        cerr << RED << "User does not exist: " << username << RESET << endl;
-        return 1;
-    }
-
-    if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0) {
-        cerr << RED << "Failed to change user and group ID." << RESET << endl;
-        return 1;
-    }
-
-    system(command.c_str());
     return 0;
 }

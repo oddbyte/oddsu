@@ -19,8 +19,8 @@ g++ -o oddsuperuser oddsuperuser.cpp -lcryptopp
 if [ $? -eq 0 ]; then
     echo "Compilation successful."
 
-    # Run the program with root perms to trigger the installation
-    sudo ./oddsuperuser
+    # Run the program with root perms and trigger a forced installation
+    sudo ./oddsuperuser --install-force
 else
     echo "Compilation failed."
     exit 1
