@@ -232,7 +232,8 @@ int main(int argc, char* argv[]) {
         setenv("USER", username.c_str(), 1);
         setenv("LOGNAME", username.c_str(), 1);
         setenv("SHELL", pwd->pw_shell, 1);
-        setenv("PATH", "/usr/bin:/bin", 1);  // Minimal PATH; adjust as needed
+        setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin", 1);  // Normal PATH; adjust as needed
+        setenv("color_prompt", "yes", 1);
 
         if (setgid(pwd->pw_gid) != 0 || setuid(pwd->pw_uid) != 0 || seteuid(pwd->pw_uid) != 0) {
             cerr << RED << "Failed to change user/group ID." << RESET << endl;
