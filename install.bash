@@ -1,7 +1,18 @@
 #!/bin/bash
 
+# Install necessary libraries
+if command -v apt-get &> /dev/null; then
+    sudo apt-get update
+    sudo apt-get install -y libssl-dev
+elif command -v yum &> /dev/null; then
+    sudo yum install -y openssl-devel
+else
+    echo "Package manager not supported. Please install OpenSSL development libraries manually."
+    exit 1
+fi
+
 # Compile
-g++ -o osuserver server.cpp
+g++ -o osuserver server.cpp -lssl -lcrypto
 g++ -o osumiddleman middleman.cpp -lssl -lcrypto
 g++ -o osu client.cpp
 
