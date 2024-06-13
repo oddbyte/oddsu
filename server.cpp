@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <iomanip> // For std::setw and std::setfill
 #include <cstdlib>
 
 #define PORT 99
@@ -35,18 +36,19 @@ std::unordered_map<int, WhitelistEntry> loadWhitelist() {
             continue;
 
         std::istringstream iss(line);
-        int id;
-        std::string filePath, fileHash, users;
-        iss >> id;
+        std::string id_str, filePath, fileHash, users;
+        std::getline(iss, id_str, '`');
         std::getline(iss, filePath, '`');
         std::getline(iss, fileHash, '`');
         std::getline(iss, users, '`');
 
+        int id = std::stoi(id_str);
         std::vector<std::string> allowedUsers;
         std::stringstream ss(users);
         std::string user;
-        while (std::getline(ss, user, '::')) {
-            allowedUsers.push_back(user);
+        while (std::getline(ss, user, ':')) { // Use ':' as delimiter
+            if (user != ":")
+                allowedUsers.push_back(user);
         }
 
         WhitelistEntry entry = {id, filePath, fileHash, allowedUsers};
@@ -86,7 +88,7 @@ void updateWhitelistHashes() {
         for (size_t i = 0; i < entry.second.allowedUsers.size(); ++i) {
             outfile << entry.second.allowedUsers[i];
             if (i < entry.second.allowedUsers.size() - 1) {
-                outfile << "::";
+                outfile << ":";
             }
         }
         outfile << '\n';

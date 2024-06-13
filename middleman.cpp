@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <regex>
+#include <iomanip> // For std::setw and std::setfill
 
 #define SERVER_PORT 99
 #define PERMISSION_MIDDLEMAN_PORT 98
@@ -47,18 +48,19 @@ std::unordered_map<int, WhitelistEntry> loadWhitelist() {
             continue;
 
         std::istringstream iss(line);
-        int id;
-        std::string filePath, fileHash, users;
-        iss >> id;
+        std::string id_str, filePath, fileHash, users;
+        std::getline(iss, id_str, '`');
         std::getline(iss, filePath, '`');
         std::getline(iss, fileHash, '`');
         std::getline(iss, users, '`');
 
+        int id = std::stoi(id_str);
         std::vector<std::string> allowedUsers;
         std::stringstream ss(users);
         std::string user;
-        while (std::getline(ss, user, '::')) {
-            allowedUsers.push_back(user);
+        while (std::getline(ss, user, ':')) { // Use ':' as delimiter
+            if (user != ":")
+                allowedUsers.push_back(user);
         }
 
         WhitelistEntry entry = {id, filePath, fileHash, allowedUsers};
@@ -172,9 +174,9 @@ void handleRequest(int clientSocket, std::unordered_map<int, WhitelistEntry> &wh
             std::vector<std::string> allowedUsers;
             std::stringstream ss(users);
             std::string user;
-            while (std::getline(ss, user, '::')) {
+            while (std::getline(ss, user, ':')) { // Use ':' as delimiter
                 if (isValidUserName(user)) {
-                    uid_t uid = getpwnam(user)->pw_uid;
+                    uid_t uid = getpwnam(user.c_str())->pw_uid; // Convert std::string to const char*
                     allowedUsers.push_back(std::to_string(uid));
                 } else {
                     std::cerr << "Invalid username: " << user << std::endl;
@@ -186,7 +188,7 @@ void handleRequest(int clientSocket, std::unordered_map<int, WhitelistEntry> &wh
             for (size_t i = 0; i < allowedUsers.size(); ++i) {
                 outfile << allowedUsers[i];
                 if (i < allowedUsers.size() - 1) {
-                    outfile << "::";
+                    outfile << ":";
                 }
             }
             outfile << '\n';
@@ -204,7 +206,7 @@ void handleRequest(int clientSocket, std::unordered_map<int, WhitelistEntry> &wh
             for (size_t i = 0; i < entry.second.allowedUsers.size(); ++i) {
                 oss << entry.second.allowedUsers[i];
                 if (i < entry.second.allowedUsers.size() - 1) {
-                    oss << "::";
+                    oss << ":";
                 }
             }
             oss << "\n";
